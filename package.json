@@ -4,8 +4,7 @@
   "description": "Service d'automatisation pour TraitementSV",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "install-browser": "npx @puppeteer/browsers install chrome@stable"
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.19.2",
