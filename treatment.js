@@ -1,27 +1,26 @@
 const puppeteer = require('puppeteer');
 
-// La fonction est exportée pour être utilisée par server.js
 async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
     let browser = null;
-    console.log("Le robot démarre sa logique interne.");
+    console.log("Le robot démarre sa logique interne avec Firefox.");
 
     try {
-        // ======================= LA CORRECTION EST ICI =======================
-        // On supprime la ligne "executablePath" pour laisser Puppeteer
-        // trouver lui-même le navigateur que nous avons installé via npm.
-        // =====================================================================
+        // ====================================================================
+        // === CHANGEMENT MAJEUR : ON PASSE À FIREFOX                       ===
+        // ====================================================================
         browser = await puppeteer.launch({
+            product: 'firefox', // On spécifie d'utiliser Firefox
             headless: true,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
-                '--single-process'
             ]
         });
-        
+        // ====================================================================
+
         const page = await browser.newPage();
-        page.setDefaultTimeout(60000); // Timeout de 60 secondes pour les opérations
+        page.setDefaultTimeout(60000);
 
         console.log("Étape 1: Connexion au portail Eneo...");
         await page.goto('https://smartmeteringbom.eneoapps.com/#/login', { waitUntil: 'networkidle2' });
@@ -60,15 +59,12 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
         await page.waitForSelector('#username', { visible: true });
         console.log("Déconnexion réussie.");
 
-        // On renvoie un objet de succès pour que server.js le traite
         return { success: true, message: `Traitement pour ${idSaisi} effectué.` };
 
     } catch (error) {
-        // En cas d'erreur, on la "remonte" à l'appelant (server.js)
-        console.error("Erreur dans le robot Puppeteer:", error.message);
+        console.error("Erreur dans le robot Puppeteer (Firefox):", error.message);
         throw new Error(error.message);
     } finally {
-        // On s'assure que le navigateur est bien fermé, même en cas d'erreur
         if (browser) {
             console.log("Fermeture du navigateur.");
             await browser.close();
@@ -76,5 +72,4 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
     }
 }
 
-// On exporte la fonction pour que server.js puisse l'importer et l'utiliser
 module.exports = runTreatment;
