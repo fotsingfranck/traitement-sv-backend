@@ -2,23 +2,20 @@ const puppeteer = require('puppeteer');
 
 async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
     let browser = null;
-    console.log("Le robot démarre sa logique interne avec Firefox.");
+    console.log("Le robot démarre sa logique interne avec Chrome.");
 
     try {
-        // ====================================================================
-        // === CHANGEMENT MAJEUR : ON PASSE À FIREFOX                       ===
-        // ====================================================================
+        // On revient à la configuration standard pour Chrome
         browser = await puppeteer.launch({
-            product: 'firefox', // On spécifie d'utiliser Firefox
             headless: true,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
+                '--single-process'
             ]
         });
-        // ====================================================================
-
+        
         const page = await browser.newPage();
         page.setDefaultTimeout(60000);
 
@@ -62,7 +59,7 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
         return { success: true, message: `Traitement pour ${idSaisi} effectué.` };
 
     } catch (error) {
-        console.error("Erreur dans le robot Puppeteer (Firefox):", error.message);
+        console.error("Erreur dans le robot Puppeteer (Chrome):", error.message);
         throw new Error(error.message);
     } finally {
         if (browser) {
