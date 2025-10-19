@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "postinstall": "node node_modules/puppeteer/install.js"
+    "install-browser": "npx @puppeteer/browsers install chrome@stable"
   },
   "dependencies": {
     "express": "^4.19.2",
@@ -15,5 +15,6 @@
     "node": ">=18.0.0"
   }
 }
+
 
 
