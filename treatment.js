@@ -1,50 +1,57 @@
 const puppeteer = require('puppeteer');
 
-// On transforme le script en une fonction exportable qui peut être appelée par server.js
-async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
+// Fonction principale pour utiliser await
+async function runTreatment() {
     let browser = null;
-    console.log("Démarrage de la fonction runTreatment.");
+    console.log("Démarrage du processus de traitement Eneo.");
 
     try {
-        // Options de lancement pour la compatibilité avec Render.com
+        // --- Récupération des arguments depuis l'appel PHP ---
+        const idSaisi = process.argv[2];
+        const codeSaisi = process.argv[3];
+        const idMra = process.argv[4];   // Correspond à userMRA
+        const codeMra = process.argv[5]; // Correspond à mdpMRA
+
+        if (!idSaisi || !codeSaisi || !idMra || !codeMra) {
+            throw new Error("Arguments manquants. Le script a besoin de: idSaisi, codeSaisi, userMRA, mdpMRA.");
+        }
+
+        console.log("Lancement du navigateur pour l'automatisation...");
         browser = await puppeteer.launch({
-            headless: true, // "true" pour le serveur, "false" pour tester en local et voir le navigateur
+            headless: true,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--single-process'
             ],
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH, // Important pour Render
+            // Utilise le chemin du navigateur fourni par l'environnement Render
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
         });
-        
+
         const page = await browser.newPage();
-        // Augmenter le timeout général pour les sites qui peuvent être lents
-        page.setDefaultTimeout(60000); // 60 secondes
+        page.setDefaultTimeout(60000); // Timeout de 60 secondes pour les opérations
 
         // ===== 1. Connexion =====
-        console.log("Étape 1: Navigation vers la page de login...");
+        console.log("Étape 1: Navigation vers la page de login Eneo...");
         await page.goto('https://smartmeteringbom.eneoapps.com/#/login', { waitUntil: 'networkidle2' });
-        
-        console.log("Remplissage des identifiants...");
-        await page.waitForSelector('#username');
-        await page.type('#username', userMRA);
-        await page.type('#password', mdpMRA);
+
+        console.log("Remplissage des identifiants de connexion Eneo...");
+        await page.waitForSelector('#username', { visible: true });
+        await page.type('#username', idMra); // Utilise idMra
+        await page.type('#password', codeMra); // Utilise codeMra
 
         await page.click('button[type="submit"]');
-        
-        // Attendre que la navigation après connexion soit terminée
         await page.waitForNavigation({ waitUntil: 'networkidle2' });
-        console.log("Connexion réussie.");
+        console.log("Connexion au portail Eneo réussie.");
 
         // ===== 2. Aller à la page de recherche =====
         const searchUrl = `https://smartmeteringbom.eneoapps.com/#/device?filter=%7B%22device_identifier%22%3A%22${idSaisi}%22%7D`;
-        console.log(`Étape 2: Navigation vers la page de recherche pour ID: ${idSaisi}`);
+        console.log(`Étape 2: Navigation vers la recherche pour l'ID: ${idSaisi}`);
         await page.goto(searchUrl, { waitUntil: 'networkidle2' });
 
         // ===== 3. Lancer la validation =====
-        console.log("Étape 3: Clic sur le bouton de validation...");
-        // Utiliser un sélecteur plus robuste qui attend que l'élément soit visible
+        console.log("Étape 3: Clic sur le bouton de commande de l'appareil...");
         const validationButtonSelector = 'a[title="Device Command"]';
         await page.waitForSelector(validationButtonSelector, { visible: true });
         await page.click(validationButtonSelector);
@@ -52,40 +59,47 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
         // Attendre que le formulaire de validation (pop-up) apparaisse
         const codeInputSelector = 'input[name="parameters.command_code"]';
         await page.waitForSelector(codeInputSelector, { visible: true });
-        
-        console.log(`Saisie du code: ${codeSaisi}`);
+
+        console.log(`Saisie du code de traitement: ${codeSaisi}`);
         await page.type(codeInputSelector, codeSaisi);
-
         await page.click('button[aria-label="Save"]');
-        
-        // Attendre une confirmation ou la redirection. 'networkidle0' est encore plus patient.
-        await page.waitForNavigation({ waitUntil: 'networkidle0' });
-        console.log("Validation soumise.");
 
-        // ===== 4. Déconnexion (Optionnelle mais recommandée) =====
-        console.log("Étape 4: Déconnexion...");
+        // Attendre la fin de l'opération
+        await page.waitForNavigation({ waitUntil: 'networkidle0' });
+        console.log("Formulaire de validation soumis.");
+
+        // ===== 4. Déconnexion (Recommandée) =====
+        console.log("Étape 4: Déconnexion du portail Eneo...");
         const logoutButtonSelector = 'a[href="#/logout"]';
-        await page.waitForSelector(logoutButtonSelector, { visible: true });
+        // Il se peut que le bouton ne soit pas immédiatement visible après la redirection
+        await page.waitForSelector(logoutButtonSelector, { visible: true, timeout: 15000 });
         await page.click(logoutButtonSelector);
-        
-        await page.waitForSelector('#username', { visible: true }); // Attendre de revoir le champ username de la page de login
+        await page.waitForSelector('#username', { visible: true }); // Attendre le retour à la page de login
         console.log("Déconnexion réussie.");
 
-        return { success: true, message: `Traitement pour ${idSaisi} effectué.` };
+        // --- Sortie JSON pour le script PHP ---
+        console.log(JSON.stringify({
+            status: 'ok',
+            message: `Traitement pour ${idSaisi} terminé avec succès.`
+        }));
 
     } catch (error) {
-        console.error("Une erreur est survenue dans le script Puppeteer:", error);
-        // On "relance" l'erreur pour que le bloc try/catch dans server.js puisse la récupérer
-        // et la renvoyer proprement au PHP.
-        throw new Error(error.message || "Une erreur inconnue est survenue dans Puppeteer.");
+        // --- Sortie JSON d'erreur pour le script PHP ---
+        console.error(JSON.stringify({
+            status: 'error',
+            message: "Le service d'automatisation a échoué",
+            details: error.message || "Une erreur inconnue est survenue dans Puppeteer."
+        }));
+
     } finally {
-        // Très important : toujours s'assurer que le navigateur est fermé, même en cas d'erreur.
         if (browser) {
             console.log("Fermeture du navigateur.");
             await browser.close();
         }
+        // Termine le processus Node.js pour que PHP sache que c'est fini
+        process.exit();
     }
 }
 
-// On exporte la fonction pour que server.js puisse l'utiliser
-module.exports = runTreatment;
+// Lancement de la fonction principale
+runTreatment();
