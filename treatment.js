@@ -1,19 +1,27 @@
 const puppeteer = require('puppeteer');
 
-// La fonction est maintenant exportée pour être utilisée par server.js
+// La fonction est exportée pour être utilisée par server.js
 async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
     let browser = null;
     console.log("Le robot démarre sa logique interne.");
 
     try {
+        // ======================= LA CORRECTION EST ICI =======================
+        // On supprime la ligne "executablePath" pour laisser Puppeteer
+        // trouver lui-même le navigateur que nous avons installé via npm.
+        // =====================================================================
         browser = await puppeteer.launch({
             headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--single-process'],
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--single-process'
+            ]
         });
         
         const page = await browser.newPage();
-        page.setDefaultTimeout(60000);
+        page.setDefaultTimeout(60000); // Timeout de 60 secondes pour les opérations
 
         console.log("Étape 1: Connexion au portail Eneo...");
         await page.goto('https://smartmeteringbom.eneoapps.com/#/login', { waitUntil: 'networkidle2' });
@@ -40,6 +48,7 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
         console.log(`Saisie du code: ${codeSaisi}`);
         await page.type(codeInputSelector, codeSaisi);
         await page.click('button[aria-label="Save"]');
+        
         await page.waitForNavigation({ waitUntil: 'networkidle0' });
         console.log("Validation soumise.");
 
@@ -47,15 +56,19 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
         const logoutButtonSelector = 'a[href="#/logout"]';
         await page.waitForSelector(logoutButtonSelector, { visible: true });
         await page.click(logoutButtonSelector);
+        
         await page.waitForSelector('#username', { visible: true });
         console.log("Déconnexion réussie.");
 
+        // On renvoie un objet de succès pour que server.js le traite
         return { success: true, message: `Traitement pour ${idSaisi} effectué.` };
 
     } catch (error) {
+        // En cas d'erreur, on la "remonte" à l'appelant (server.js)
         console.error("Erreur dans le robot Puppeteer:", error.message);
         throw new Error(error.message);
     } finally {
+        // On s'assure que le navigateur est bien fermé, même en cas d'erreur
         if (browser) {
             console.log("Fermeture du navigateur.");
             await browser.close();
@@ -63,5 +76,5 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
     }
 }
 
-// On exporte la fonction pour que server.js puisse l'importer
+// On exporte la fonction pour que server.js puisse l'importer et l'utiliser
 module.exports = runTreatment;
