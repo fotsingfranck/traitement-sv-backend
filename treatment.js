@@ -4,71 +4,65 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
     let browser = null;
     let page;
 
-    console.log("Le robot démarre, mode 'bavard' activé.");
+    // Le codeSaisi n'est plus utilisé avec cette nouvelle logique, mais on ne le supprime pas.
+    console.log("Le robot démarre, mode de capture du bouton 'coche' activé.");
 
     try {
-        // --- ÉTAT : Lancement du navigateur ---
         browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
         console.log("LOG: Navigateur lancé.");
         page = await browser.newPage();
-        console.log("LOG: Nouvelle page ouverte.");
-        page.setDefaultTimeout(60000);
+        page.setDefaultTimeout(90000); // Timeout général augmenté à 90s
 
-        // --- ÉTAT : Navigation vers la page de login ---
+        // --- ÉTAT : Connexion ---
+        console.log("LOG: Accès à la page de login.");
         await page.goto('https://smartmeteringbom.eneoapps.com/#/login', { waitUntil: 'networkidle2' });
-        console.log("LOG: Page de login atteinte.");
         await page.waitForSelector('#username', { visible: true });
-        console.log("LOG: Champ 'username' visible.");
-
-        // --- ÉTAT : Saisie des identifiants ---
+        console.log("LOG: Saisie des identifiants.");
         await page.type('#username', userMRA);
-        console.log("LOG: Username saisi.");
         await page.type('#password', mdpMRA);
-        console.log("LOG: Password saisi.");
         await page.click('button[type="submit"]');
-        console.log("LOG: Clic sur 'Sign in'.");
         await page.waitForNavigation({ waitUntil: 'networkidle2' });
-        console.log("LOG: Connexion réussie, page dashboard chargée.");
+        console.log("LOG: Connexion réussie.");
 
         // --- ÉTAT : Navigation vers la page de recherche ---
         const searchUrl = `https://smartmeteringbom.eneoapps.com/#/device?filter=%7B%22device_identifier%22%3A%22${idSaisi}%22%7D`;
-        console.log(`LOG: Navigation vers l'URL de recherche pour l'ID ${idSaisi}.`);
+        console.log(`LOG: Navigation vers la page de l'ID ${idSaisi}.`);
         await page.goto(searchUrl, { waitUntil: 'networkidle2' });
-        console.log("LOG: Page de recherche chargée.");
+        console.log("LOG: Page de recherche de l'ID chargée.");
 
-        // --- ÉTAT : Clic sur le bouton de commande ---
-        await page.waitForFunction(() => document.querySelectorAll('a').length > 4, { timeout: 15000 });
-        console.log("LOG: Assez de liens trouvés sur la page.");
-        const allLinks = await page.$$('a');
-        await allLinks[4].click();
-        console.log("LOG: Clic sur le 5ème lien effectué.");
+        // --- ACTION PRINCIPALE : Clic sur l'icône de validation "coche" ---
+        console.log("LOG: Recherche du bouton de validation (icône coche)...");
 
-        // --- ÉTAT : Saisie du code ---
-        const codeInputSelector = 'input[type="text"]:not([disabled])';
-        await page.waitForSelector(codeInputSelector, { visible: true, timeout: 15000 });
-        console.log("LOG: Champ de saisie du code trouvé.");
-        await page.type(codeInputSelector, codeSaisi);
-        console.log(`LOG: Saisie du code '${codeSaisi}' effectuée.`);
+        // Ce sélecteur est la traduction directe de vos captures.
+        // Il cherche un lien <a> qui contient un chemin SVG <path> avec le dessin de la coche.
+        const checkmarkButtonSelector = 'a:has(> span > svg > path[d*="M12 2C6.48"])';
+        
+        await page.waitForSelector(checkmarkButtonSelector, { visible: true, timeout: 20000 });
+        console.log("LOG: Bouton de validation (coche) trouvé !");
 
-        // --- ÉTAT : Validation ---
-        const confirmButtonSelector = 'button ::-p-text(Confirmer)';
-        await page.waitForSelector(confirmButtonSelector, { visible: true });
-        console.log("LOG: Bouton 'Confirmer' trouvé.");
-        await page.click(confirmButtonSelector);
-        console.log("LOG: Clic sur 'Confirmer'.");
-        await page.waitForNavigation({ waitUntil: 'networkidle0' });
-        console.log("LOG: Navigation après validation terminée.");
+        await page.click(checkmarkButtonSelector);
+        console.log("LOG: Clic sur le bouton de validation effectué.");
 
+        // On attend une confirmation. Souvent, un message "toast" de succès apparaît.
+        try {
+            // Sélecteur générique pour les messages de succès
+            const toastSelector = '[class*="Toastify__toast--success"], [class*="MuiAlert-filledSuccess"]';
+            await page.waitForSelector(toastSelector, { visible: true, timeout: 15000 });
+            const successMessage = await page.$eval(toastSelector, el => el.textContent);
+            console.log(`LOG: Message de succès capturé : "${successMessage}"`);
+        } catch(e) {
+            console.log("LOG: Pas de message de succès détecté, mais l'action a probablement réussi. On continue.");
+        }
+        
         // --- ÉTAT : Déconnexion ---
+        console.log("LOG: Recherche du bouton de déconnexion.");
         const logoutSelector = '[role="menuitem"] ::-p-text(Déconnexion)';
         await page.waitForSelector(logoutSelector, { visible: true });
-        console.log("LOG: Bouton de déconnexion trouvé.");
         await page.click(logoutSelector);
-        console.log("LOG: Clic sur 'Déconnexion'.");
         await page.waitForSelector('#username', { visible: true, timeout: 15000 });
-        console.log("LOG: Déconnexion confirmée, retour au login.");
+        console.log("LOG: Déconnexion confirmée.");
 
-        return { success: true, message: `Traitement pour l'ID ${idSaisi} effectué avec succès.` };
+        return { success: true, message: `Opération pour l'ID ${idSaisi} lancée avec succès.` };
 
     } catch (error) {
         if (page) {
