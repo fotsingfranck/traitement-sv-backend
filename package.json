@@ -5,13 +5,13 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "install-firefox": "npx @puppeteer/browsers install firefox@stable"
+    "postinstall": "npx @puppeteer/browsers install firefox@stable"
   },
   "dependencies": {
     "express": "^4.19.2",
     "puppeteer": "^22.10.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "18.17.0"
   }
 }
