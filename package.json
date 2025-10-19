@@ -3,9 +3,8 @@
   "version": "1.0.0",
   "description": "Service d'automatisation pour TraitementSV",
   "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "postinstall": "npx @puppeteer/browsers install firefox@stable"
+  "scripts": {"start": "node server.js",
+    "postinstall": "npx @puppeteer/browsers install firefox@esr"
   },
   "dependencies": {
     "express": "^4.19.2",
