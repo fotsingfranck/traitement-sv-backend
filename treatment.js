@@ -2,7 +2,9 @@ const puppeteer = require('puppeteer');
 
 async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
     let browser = null;
-    console.log("Le robot démarre sa logique interne, style Playwright.");
+    let page; // Déclarer page ici pour l'utiliser dans le bloc catch
+
+    console.log("Le robot démarre, mode de confiance totale à Playwright.");
 
     try {
         browser = await puppeteer.launch({
@@ -15,72 +17,70 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
             ]
         });
         
-        const page = await browser.newPage();
+        page = await browser.newPage();
         page.setDefaultTimeout(60000);
 
-        // --- ÉTAPE 1: CONNEXION (Style Playwright) ---
-        console.log("Étape 1: Connexion au portail Eneo...");
+        // --- ÉTAPE 1: CONNEXION ---
+        console.log("Étape 1: Connexion au portail...");
         await page.goto('https://smartmeteringbom.eneoapps.com/#/login', { waitUntil: 'networkidle2' });
-        
         await page.waitForSelector('#username', { visible: true });
         await page.type('#username', userMRA);
         await page.type('#password', mdpMRA);
         await page.click('button[type="submit"]');
-        
-        // Attente de la navigation post-connexion
         await page.waitForNavigation({ waitUntil: 'networkidle2' });
-        console.log("Connexion réussie, navigation vers la page de recherche.");
+        console.log("Connexion réussie.");
 
-        // --- ÉTAPE 2: RECHERCHE (Style Playwright) ---
+        // --- ÉTAPE 2: RECHERCHE ---
         const searchUrl = `https://smartmeteringbom.eneoapps.com/#/device?filter=%7B%22device_identifier%22%3A%22${idSaisi}%22%7D`;
+        console.log(`Étape 2: Navigation vers la page de l'ID ${idSaisi}`);
         await page.goto(searchUrl, { waitUntil: 'networkidle2' });
 
-        // --- ÉTAPE 3: CLIC SUR LE BOUTON DE COMMANDE (Logique Playwright directe) ---
-        console.log("Étape 3: Clic sur le bouton de commande (5ème lien de la page)...");
+        // --- ÉTAPE 3: CLIC SUR LE BOUTON DE COMMANDE ---
+        console.log("Étape 3: Clic sur le 5ème lien de la page...");
+        await page.waitForFunction(() => document.querySelectorAll('a').length > 4, { timeout: 15000 });
         
-        // On attend qu'il y ait au moins 5 liens sur la page pour éviter une erreur
-        await page.waitForFunction(() => document.querySelectorAll('a').length > 4);
-        
-        // On récupère TOUS les liens et on clique sur le 5ème (index 4)
         const allLinks = await page.$$('a');
         if (allLinks.length > 4) {
             await allLinks[4].click();
         } else {
             throw new Error("Impossible de trouver le 5ème lien (bouton de commande) sur la page.");
         }
+        console.log("Clic effectué. Attente du formulaire.");
 
-        // --- ÉTAPE 4: SAISIE DU CODE (Style Playwright) ---
-        console.log("Étape 4: Saisie du code...");
-        // On attend que le formulaire apparaisse en cherchant le champ de saisie par son 'name'
-        const codeInputSelector = 'input[name="parameters.command_code"]';
-        await page.waitForSelector(codeInputSelector, { visible: true });
+        // --- ÉTAPE 4: SAISIE DU CODE ---
+        console.log("Étape 4: Recherche du premier champ de texte disponible...");
+        const codeInputSelector = 'input[type="text"]:not([disabled])';
+        await page.waitForSelector(codeInputSelector, { visible: true, timeout: 15000 });
+        console.log(`Saisie du code '${codeSaisi}' dans le champ trouvé.`);
         await page.type(codeInputSelector, codeSaisi);
 
-        // --- ÉTAPE 5: VALIDATION (Style Playwright) ---
+        // --- ÉTAPE 5: VALIDATION ---
         console.log("Étape 5: Clic sur le bouton de confirmation...");
-        // On cherche un bouton qui contient le texte "Confirmer"
         const confirmButtonSelector = 'button ::-p-text(Confirmer)';
         await page.waitForSelector(confirmButtonSelector, { visible: true });
         await page.click(confirmButtonSelector);
         
-        // Attendre la navigation ou la confirmation qui suit la validation
         await page.waitForNavigation({ waitUntil: 'networkidle0' });
         console.log("Validation soumise avec succès.");
 
-        // --- ÉTAPE 6: DÉCONNEXION (Style Playwright) ---
+        // --- ÉTAPE 6: DÉCONNEXION (Logique Playwright : "l'élément de menu Déconnexion") ---
         console.log("Étape 6: Déconnexion...");
-        // On attend que le bouton soit de nouveau visible après la redirection
-        await page.waitForSelector('a[href="#/logout"]', { visible: true });
-        await page.click('a[href="#/logout"]');
+        // C'est la traduction fidèle de getByRole('menuitem', { name: 'Déconnexion' })
+        const logoutSelector = 'a[role="menuitem"] ::-p-text(Déconnexion)';
+        await page.waitForSelector(logoutSelector, { visible: true });
+        await page.click(logoutSelector);
         
-        // Vérification du retour à la page de login
         await page.waitForSelector('#username', { visible: true, timeout: 15000 });
         console.log("Déconnexion confirmée.");
 
         return { success: true, message: `Traitement pour l'ID ${idSaisi} effectué avec succès.` };
 
     } catch (error) {
-        console.error("Erreur dans le robot (style Playwright):", error.message);
+        // Log d'erreur amélioré pour savoir où le robot s'est arrêté
+        if (page) {
+            console.error(`Erreur dans le robot (style Playwright) à l'URL: ${page.url()}`);
+        }
+        console.error(error.message);
         throw new Error(error.message);
     } finally {
         if (browser) {
