@@ -4,7 +4,8 @@
   "description": "Service d'automatisation pour TraitementSV",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "install-firefox": "npx @puppeteer/browsers install firefox"
   },
   "dependencies": {
     "express": "^4.19.2",
@@ -14,6 +15,3 @@
     "node": ">=18.0.0"
   }
 }
-
-
-
