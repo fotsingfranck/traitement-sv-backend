@@ -1,50 +1,58 @@
 const express = require('express');
-const runTreatment = require('./treatment.js'); // On importe notre script puppeteer
+const runTreatment = require('./treatment.js'); // On importe la logique du robot
 
 const app = express();
-// Le port est soit fourni par l'hébergeur (Render), soit 3000 par défaut en local
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 10000; // Port fourni par Render
 
-// Middleware pour pouvoir lire le JSON envoyé par notre PHP
+// Middleware pour permettre à express de lire le JSON des requêtes POST
 app.use(express.json());
 
-// On définit une "route" (URL) que notre PHP pourra appeler.
-// Exemple : une requête POST sur https://VOTRE-SERVICE.onrender.com/api/execute-treatment
+// Message de bienvenue simple pour tester si le serveur est en ligne
+app.get('/', (req, res) => {
+    res.send('Service TraitementSV Backend est en ligne.');
+});
+
+// Le point d'entrée pour votre API, celui appelé par interface.php
 app.post('/api/execute-treatment', async (req, res) => {
-    // On récupère les données envoyées par le PHP dans le corps de la requête
+    console.log("Requête reçue sur /api/execute-treatment");
+
+    // On récupère les données du corps de la requête JSON
     const { id_saisi, code_saisi, usermra, mdpmra } = req.body;
 
-    // Validation simple des paramètres
+    // Validation simple
     if (!id_saisi || !code_saisi || !usermra || !mdpmra) {
-        console.log("Erreur: Paramètres manquants reçus.", req.body);
-        return res.status(400).json({ status: 'error', message: 'Paramètres manquants (id_saisi, code_saisi, usermra, ou mdpmra).' });
+        console.log("Erreur: Données manquantes dans la requête.");
+        return res.status(400).json({
+            status: 'error',
+            message: 'Données manquantes',
+            details: 'Les paramètres id_saisi, code_saisi, usermra, et mdpmra sont requis.'
+        });
     }
-
-    console.log(`Lancement du traitement pour ID: ${id_saisi}`);
 
     try {
-        // On lance la fonction puppeteer et on attend son résultat (elle peut prendre du temps)
+        console.log(`Lancement du robot pour ID: ${id_saisi}`);
+        // On appelle la fonction du robot avec les bons paramètres
         const result = await runTreatment(id_saisi, code_saisi, usermra, mdpmra);
         
-        console.log("Traitement Puppeteer terminé avec succès.");
-        // On renvoie une réponse de succès au PHP
-        return res.status(200).json({ status: 'ok', message: 'Traitement automatisé terminé avec succès.', details: result });
+        console.log("Le robot a terminé avec succès.");
+        // Le robot a réussi, on renvoie une réponse 200 OK
+        res.status(200).json({
+            status: 'ok',
+            message: result.message || 'Traitement terminé avec succès.'
+        });
 
     } catch (error) {
-        // Si une erreur se produit dans le script Puppeteer, on la capture ici
-        console.error("ERREUR durant le traitement Puppeteer:", error.message);
-        // On renvoie une réponse d'erreur au PHP avec les détails
-        return res.status(500).json({ status: 'error', message: 'Le script d\'automatisation a échoué.', details: error.message });
+        console.error("Le robot a échoué:", error.message);
+        // Le robot a échoué, on renvoie une réponse 500 Erreur Serveur
+        res.status(500).json({
+            status: 'error',
+            message: 'Le service d\'automatisation a échoué',
+            details: error.message
+        });
     }
 });
-
-// Route "test" pour vérifier que le serveur est bien en ligne
-app.get('/', (req, res) => {
-    res.send('Le serveur d\'automatisation TraitementSV est en ligne !');
-});
-
 
 // Démarrage du serveur
 app.listen(port, () => {
-    console.log(`Le serveur d'audit écoute sur le port ${port}`);
+    console.log(`Serveur démarré et à l'écoute sur le port ${port}`);
 });
