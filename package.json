@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "install-firefox": "npx @puppeteer/browsers install firefox"
+    "install-firefox": "npx @puppeteer/browsers install firefox@stable"
   },
   "dependencies": {
     "express": "^4.19.2",
