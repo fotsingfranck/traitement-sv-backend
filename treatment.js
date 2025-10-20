@@ -1,113 +1,180 @@
+// ================================================================================
+// === SCRIPT DE TRAITEMENT FINAL (PUPPETEER) - VERSION "ULTRA BAVARDE & PARANOÏAQUE" ===
+// === Fusionne les 4 séquences avec des logs détaillés et des vérifications d'URL. ===
+// ================================================================================
+
 const puppeteer = require('puppeteer');
 
-async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
-    let browser = null;
+/**
+ * Fonction principale du robot qui exécute la séquence complète.
+ * @param {string} idSaisi - L'ID de l'appareil à traiter.
+ * @param {string} codeSaisi - Le code de confirmation.
+ * @param {string} userMRA - Le nom d'utilisateur.
+ * @param {string} mdpMRA - Le mot de passe.
+ * @param {function} logCallback - Fonction pour envoyer des logs en temps réel.
+ */
+async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
+    let browser;
     let page;
 
-    console.log("Le robot démarre, mode 'Séquence Playwright Stricte & Bavarde' activé.");
+    // Fonction interne pour logger, pour ne pas répéter 'if (logCallback)' partout.
+    const log = (message) => {
+        if (logCallback) {
+            logCallback(message);
+        } else {
+            console.log(message);
+        }
+    };
 
     try {
-        browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-        console.log("LOG RETOUR: Navigateur lancé.");
-
+        log("<<<<< DÉMARRAGE DU ROBOT TRAITEMENT-SV >>>>>");
+        browser = await puppeteer.launch({
+            headless: true, // `true` est essentiel pour le serveur.
+            args: ['--no-sandbox', '--disable-setuid-sandbox'] // Indispensable pour Render/Linux
+        });
         page = await browser.newPage();
-        console.log("LOG RETOUR: Nouvelle page ouverte.");
+        await page.setViewport({ width: 1366, height: 768 });
+        // Un timeout long (90s) pour les actions, pour ne pas échouer sur un serveur lent.
+        page.setDefaultTimeout(90000); 
 
-        page.setDefaultTimeout(90000); // Timeout général de 90s
-
-        // --- ÉTAPE 1: Connexion ---
-        console.log("LOG ACTION: 1. Navigation vers la page de login.");
+        // =================================================================
+        // === SÉQUENCE 1/4 : CONNEXION                                  ===
+        // =================================================================
+        log("\n--- SÉQUENCE 1 : CONNEXION ---");
+        log(`[1.1] DÉBUT : Navigation vers la page de login.`);
+        log(`      URL ATTENDUE : https://smartmeteringbom.eneoapps.com/#/login`);
         await page.goto('https://smartmeteringbom.eneoapps.com/#/login', { waitUntil: 'networkidle2' });
-        console.log("LOG RETOUR: 1. Page de login atteinte.");
+        
+        if (!page.url().includes('/login')) {
+            throw new Error("Échec de la navigation initiale. La page de login n'a pas été atteinte.");
+        }
+        log(`[1.1] SUCCÈS : Page de login chargée.`);
 
+        log(`[1.2] ACTION : Saisie des identifiants (Utilisateur: ${userMRA}).`);
         await page.waitForSelector('#username', { visible: true });
-        console.log("LOG RETOUR: 1. Champ 'username' visible.");
-
-        console.log("LOG ACTION: 1. Saisie des identifiants et clic.");
         await page.type('#username', userMRA);
         await page.type('#password', mdpMRA);
+        
+        log(`[1.3] ACTION : Clic sur le bouton 'Sign in'.`);
         await page.click('button[type="submit"]');
-        console.log("LOG RETOUR: 1. Clic de connexion effectué.");
 
+        log(`[1.4] VÉRIFICATION : Attente de la redirection et du chargement du tableau de bord.`);
+        log(`      URL ATTENDUE : https://smartmeteringbom.eneoapps.com/#/`);
         await page.waitForNavigation({ waitUntil: 'networkidle2' });
-        console.log("LOG RETOUR: 1. Connexion réussie.");
+        
+        if (!page.url().endsWith('/#/')) {
+             throw new Error("La connexion a échoué. Redirection vers le tableau de bord non détectée.");
+        }
+        log(`[1.4] SUCCÈS : Redirection vers le tableau de bord confirmée.`);
+        log("--- FIN SÉQUENCE 1 : Connexion réussie. ---\n");
 
-        // --- ÉTAPE 2: Clic sur 'Appareils' ---
-        console.log("LOG ACTION: 2. Recherche et clic sur 'Appareils'.");
-        const appareilsButtonSelector = 'button ::-p-text(Appareils)';
-        await page.waitForSelector(appareilsButtonSelector, { visible: true });
-        await page.click(appareilsButtonSelector);
-        console.log("LOG RETOUR: 2. Clic sur 'Appareils' effectué.");
 
-        // --- ÉTAPE 3: Clic sur 'Ajouter un filtre' ---
-        console.log("LOG ACTION: 3. Recherche et clic sur 'Ajouter un filtre'.");
-        const addFilterButtonSelector = 'button ::-p-text(Ajouter un filtre)';
-        await page.waitForSelector(addFilterButtonSelector, { visible: true });
-        await page.click(addFilterButtonSelector);
-        console.log("LOG RETOUR: 3. Clic sur 'Ajouter un filtre' effectué.");
+        // =================================================================
+        // === SÉQUENCE 2/4 : ACCÈS À L'ID ET FILTRAGE                   ===
+        // =================================================================
+        log("--- SÉQUENCE 2 : FILTRAGE DE L'APPAREIL ---");
+        log("[2.1] DÉBUT : La page actuelle est le tableau de bord.");
 
-        // --- ÉTAPE 4: Sélection du type de filtre 'Appareil N°' ---
-        console.log("LOG ACTION: 4. Sélection du filtre 'Appareil N°'.");
-        const filterTypeSelector = '::-p-text(Appareil N°)';
-        await page.waitForSelector(filterTypeSelector, { visible: true });
-        await page.click(filterTypeSelector);
-        console.log("LOG RETOUR: 4. Clic sur l'option 'Appareil N°' effectué.");
+        log("[2.2] ACTION : Clic sur le bouton du menu 'Appareils'.");
+        await page.click('a[href="#/device"]');
+        log("       ...attente du chargement de la page des appareils...");
+        await page.waitForNavigation({ waitUntil: 'networkidle2' });
 
-        // --- ÉTAPE 5: Saisie de l'ID ---
-        console.log(`LOG ACTION: 5. Saisie de l'ID '${idSaisi}' et validation.`);
-        const filterInputSelector = 'input[placeholder="Valeur"]';
-        await page.waitForSelector(filterInputSelector, { visible: true });
-        await page.type(filterInputSelector, idSaisi);
+        log("[2.3] ACTION : Clic sur 'Ajouter un filtre'.");
+        await page.waitForSelector('button ::-p-text(Ajouter un filtre)', { visible: true });
+        await page.click('button ::-p-text(Ajouter un filtre)');
+
+        log("[2.4] ACTION : Sélection du type de filtre 'Appareil N°'.");
+        await page.click('li ::-p-text(Appareil N°)');
+
+        log(`[2.5] ACTION : Saisie de l'ID à rechercher : "${idSaisi}".`);
+        await page.type('input[placeholder="Valeur"]', idSaisi);
         await page.keyboard.press('Enter');
-        await page.waitForSelector('.MuiCircularProgress-root', { hidden: true, timeout: 20000 });
-        console.log("LOG RETOUR: 5. Filtre pour l'ID appliqué.");
 
-        // --- ÉTAPE 6: Clic sur le 5ème lien ---
-        console.log("LOG ACTION: 6. Recherche et clic sur le 5ème lien.");
-        await page.waitForFunction(() => document.querySelectorAll('a').length > 4, { timeout: 15000 });
-        const allLinks = await page.$$('a');
-        await allLinks[4].click();
-        console.log("LOG RETOUR: 6. Clic sur le 5ème lien effectué.");
+        log("[2.6] VÉRIFICATION : Attente de la fin de la recherche (disparition du spinner).");
+        await page.waitForSelector('.MuiCircularProgress-root', { hidden: true, timeout: 30000 });
+        
+        log("[2.7] VÉRIFICATION FINALE : Contrôle de l'URL après filtrage.");
+        const encodedFilter = encodeURIComponent(JSON.stringify({ "device_identifier": idSaisi }));
+        const expectedUrlPart = `#/device?filter=${encodedFilter}`;
+        log(`      ...doit contenir : "${expectedUrlPart}"`);
+        const currentUrl = page.url();
+        if (!currentUrl.includes(expectedUrlPart)) {
+            throw new Error(`Le filtrage semble avoir échoué. L'URL actuelle (${currentUrl}) ne correspond pas à l'attente.`);
+        }
+        log("[2.7] SUCCÈS : L'URL de la page filtrée est correcte.");
+        log(`--- FIN SÉQUENCE 2 : Appareil ${idSaisi} trouvé et URL vérifiée. ---\n`);
 
-        // --- ÉTAPE 7: Saisie du Code ---
-        console.log(`LOG ACTION: 7. Saisie du code '${codeSaisi}'.`);
-        const codeInputSelector = 'input[type="text"]:not([disabled])';
-        await page.waitForSelector(codeInputSelector, { visible: true, timeout: 15000 });
-        await page.type(codeInputSelector, codeSaisi);
-        console.log("LOG RETOUR: 7. Saisie du code effectuée.");
 
-        // --- ÉTAPE 8: Clic sur 'Confirmer' ---
-        console.log("LOG ACTION: 8. Recherche et clic sur 'Confirmer'.");
-        const confirmButtonSelector = 'button ::-p-text(Confirmer)';
-        await page.waitForSelector(confirmButtonSelector, { visible: true });
-        await page.click(confirmButtonSelector);
-        console.log("LOG RETOUR: 8. Clic sur 'Confirmer' effectué.");
-        await page.waitForNavigation({ waitUntil: 'networkidle0' });
-        console.log("LOG RETOUR: 8. Navigation après confirmation terminée.");
+        // =================================================================
+        // === SÉQUENCE 3/4 : SAISIE DU CODE ET VALIDATION               ===
+        // =================================================================
+        log("--- SÉQUENCE 3 : CONFIRMATION DU TRAITEMENT ---");
+        log("[3.1] DÉBUT : La page affiche l'appareil filtré.");
+        
+        log("[3.2] ACTION : Clic sur l'icône 'Confirmer' de la bonne ligne.");
+        const confirmIconSelector = `tr:has-text("${idSaisi}") a[aria-label="Confirmer"]`;
+        await page.waitForSelector(confirmIconSelector, { visible: true });
+        await page.click(confirmIconSelector);
 
-        // --- ÉTAPE 9: Déconnexion ---
-        console.log("LOG ACTION: 9. Recherche et clic sur 'Déconnexion'.");
-        const logoutSelector = '[role="menuitem"] ::-p-text(Déconnexion)';
-        await page.waitForSelector(logoutSelector, { visible: true });
-        await page.click(logoutSelector);
-        console.log("LOG RETOUR: 9. Clic sur 'Déconnexion' effectué.");
-        await page.waitForSelector('#username', { visible: true, timeout: 15000 });
-        console.log("LOG RETOUR: 9. Déconnexion confirmée.");
+        log("[3.3] VÉRIFICATION : Attente du chargement de la page de saisie du code.");
+        await page.waitForSelector('h2 ::-p-text(Confirmer l\'appareil)', { visible: true });
+        
+        log(`[3.4] ACTION : Saisie du code de confirmation : "${codeSaisi}".`);
+        await page.type('main input[type="text"]', codeSaisi);
+        
+        log("[3.5] ACTION : Clic sur le bouton final 'Confirmer'.");
+        await page.click('button ::-p-text(Confirmer)');
 
+        log("[3.6] VÉRIFICATION : Attente du retour à la liste des appareils.");
+        log(`      URL FINALE ATTENDUE : https://smartmeteringbom.eneoapps.com/#/device`);
+        await page.waitForNavigation({ waitUntil: 'networkidle2' });
+        
+        if (!page.url().endsWith('/#/device')) {
+            throw new Error("La confirmation a échoué. Pas de retour à la liste des appareils.");
+        }
+        log("[3.6] SUCCÈS : Traitement confirmé, retour à la liste des appareils.");
+        log("--- FIN SÉQUENCE 3 : Traitement réussi. ---\n");
+
+
+        // =================================================================
+        // === SÉQUENCE 4/4 : DÉCONNEXION                                ===
+        // =================================================================
+        log("--- SÉQUENCE 4 : DÉCONNEXION ---");
+        log("[4.1] DÉBUT : La page actuelle est la liste des appareils.");
+        
+        log("[4.2] ACTION : Clic sur le bouton du menu 'Déconnexion'.");
+        await page.click('li ::-p-text(Déconnexion)');
+
+        log("[4.3] VÉRIFICATION : Attente du retour à la page de login.");
+        log(`      URL FINALE ATTENDUE : https://smartmeteringbom.eneoapps.com/#/login`);
+        await page.waitForSelector('#username', { visible: true });
+        
+        if (!page.url().includes('/login')) {
+             throw new Error("La déconnexion a échoué. La page de login n'a pas été atteinte.");
+        }
+        log("[4.3] SUCCÈS : Déconnexion confirmée.");
+        log("--- FIN SÉQUENCE 4 : Session terminée proprement. ---\n");
+        
+        log("<<<<< SÉQUENCE COMPLÈTE RÉUSSIE >>>>>");
         return { success: true, message: `Séquence complète pour l'ID ${idSaisi} réussie.` };
 
     } catch (error) {
+        let currentUrl = 'inconnue';
         if (page) {
-            console.error(`ERREUR à l'URL: ${page.url()}`);
+            currentUrl = page.url();
         }
-        console.error(error.message);
-        throw new Error(error.message);
+        log(`!!!!!!!!!! ERREUR FATALE !!!!!!!!!!`);
+        log(`       URL au moment de l'erreur : ${currentUrl}`);
+        log(`       DÉTAIL DE L'ERREUR : ${error.message}`);
+        return { success: false, message: `Le robot a échoué : ${error.message}` };
     } finally {
         if (browser) {
-            console.log("LOG FINAL: Fermeture du navigateur.");
             await browser.close();
+            log("<<<<< FERMETURE DU NAVIGATEUR >>>>>");
         }
     }
 }
 
-module.exports = runTreatment;
+// On exporte la fonction pour que le script principal du serveur puisse l'appeler.
+module.exports = { runTreatment };
