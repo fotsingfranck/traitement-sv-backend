@@ -4,65 +4,97 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
     let browser = null;
     let page;
 
-    // Le codeSaisi n'est plus utilisé avec cette nouvelle logique, mais on ne le supprime pas.
-    console.log("Le robot démarre, mode de capture du bouton 'coche' activé.");
+    console.log("Le robot démarre, mode 'Séquence Playwright Stricte & Bavarde' activé.");
 
     try {
         browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-        console.log("LOG: Navigateur lancé.");
-        page = await browser.newPage();
-        page.setDefaultTimeout(90000); // Timeout général augmenté à 90s
+        console.log("LOG RETOUR: Navigateur lancé.");
 
-        // --- ÉTAT : Connexion ---
-        console.log("LOG: Accès à la page de login.");
+        page = await browser.newPage();
+        console.log("LOG RETOUR: Nouvelle page ouverte.");
+
+        page.setDefaultTimeout(90000); // Timeout général de 90s
+
+        // --- ÉTAPE 1: Connexion ---
+        console.log("LOG ACTION: 1. Navigation vers la page de login.");
         await page.goto('https://smartmeteringbom.eneoapps.com/#/login', { waitUntil: 'networkidle2' });
+        console.log("LOG RETOUR: 1. Page de login atteinte.");
+
         await page.waitForSelector('#username', { visible: true });
-        console.log("LOG: Saisie des identifiants.");
+        console.log("LOG RETOUR: 1. Champ 'username' visible.");
+
+        console.log("LOG ACTION: 1. Saisie des identifiants et clic.");
         await page.type('#username', userMRA);
         await page.type('#password', mdpMRA);
         await page.click('button[type="submit"]');
+        console.log("LOG RETOUR: 1. Clic de connexion effectué.");
+
         await page.waitForNavigation({ waitUntil: 'networkidle2' });
-        console.log("LOG: Connexion réussie.");
+        console.log("LOG RETOUR: 1. Connexion réussie.");
 
-        // --- ÉTAT : Navigation vers la page de recherche ---
-        const searchUrl = `https://smartmeteringbom.eneoapps.com/#/device?filter=%7B%22device_identifier%22%3A%22${idSaisi}%22%7D`;
-        console.log(`LOG: Navigation vers la page de l'ID ${idSaisi}.`);
-        await page.goto(searchUrl, { waitUntil: 'networkidle2' });
-        console.log("LOG: Page de recherche de l'ID chargée.");
+        // --- ÉTAPE 2: Clic sur 'Appareils' ---
+        console.log("LOG ACTION: 2. Recherche et clic sur 'Appareils'.");
+        const appareilsButtonSelector = 'button ::-p-text(Appareils)';
+        await page.waitForSelector(appareilsButtonSelector, { visible: true });
+        await page.click(appareilsButtonSelector);
+        console.log("LOG RETOUR: 2. Clic sur 'Appareils' effectué.");
 
-        // --- ACTION PRINCIPALE : Clic sur l'icône de validation "coche" ---
-        console.log("LOG: Recherche du bouton de validation (icône coche)...");
+        // --- ÉTAPE 3: Clic sur 'Ajouter un filtre' ---
+        console.log("LOG ACTION: 3. Recherche et clic sur 'Ajouter un filtre'.");
+        const addFilterButtonSelector = 'button ::-p-text(Ajouter un filtre)';
+        await page.waitForSelector(addFilterButtonSelector, { visible: true });
+        await page.click(addFilterButtonSelector);
+        console.log("LOG RETOUR: 3. Clic sur 'Ajouter un filtre' effectué.");
 
-        // Ce sélecteur est la traduction directe de vos captures.
-        // Il cherche un lien <a> qui contient un chemin SVG <path> avec le dessin de la coche.
-        const checkmarkButtonSelector = 'a:has(> span > svg > path[d*="M12 2C6.48"])';
-        
-        await page.waitForSelector(checkmarkButtonSelector, { visible: true, timeout: 20000 });
-        console.log("LOG: Bouton de validation (coche) trouvé !");
+        // --- ÉTAPE 4: Sélection du type de filtre 'Appareil N°' ---
+        console.log("LOG ACTION: 4. Sélection du filtre 'Appareil N°'.");
+        const filterTypeSelector = '::-p-text(Appareil N°)';
+        await page.waitForSelector(filterTypeSelector, { visible: true });
+        await page.click(filterTypeSelector);
+        console.log("LOG RETOUR: 4. Clic sur l'option 'Appareil N°' effectué.");
 
-        await page.click(checkmarkButtonSelector);
-        console.log("LOG: Clic sur le bouton de validation effectué.");
+        // --- ÉTAPE 5: Saisie de l'ID ---
+        console.log(`LOG ACTION: 5. Saisie de l'ID '${idSaisi}' et validation.`);
+        const filterInputSelector = 'input[placeholder="Valeur"]';
+        await page.waitForSelector(filterInputSelector, { visible: true });
+        await page.type(filterInputSelector, idSaisi);
+        await page.keyboard.press('Enter');
+        await page.waitForSelector('.MuiCircularProgress-root', { hidden: true, timeout: 20000 });
+        console.log("LOG RETOUR: 5. Filtre pour l'ID appliqué.");
 
-        // On attend une confirmation. Souvent, un message "toast" de succès apparaît.
-        try {
-            // Sélecteur générique pour les messages de succès
-            const toastSelector = '[class*="Toastify__toast--success"], [class*="MuiAlert-filledSuccess"]';
-            await page.waitForSelector(toastSelector, { visible: true, timeout: 15000 });
-            const successMessage = await page.$eval(toastSelector, el => el.textContent);
-            console.log(`LOG: Message de succès capturé : "${successMessage}"`);
-        } catch(e) {
-            console.log("LOG: Pas de message de succès détecté, mais l'action a probablement réussi. On continue.");
-        }
-        
-        // --- ÉTAT : Déconnexion ---
-        console.log("LOG: Recherche du bouton de déconnexion.");
+        // --- ÉTAPE 6: Clic sur le 5ème lien ---
+        console.log("LOG ACTION: 6. Recherche et clic sur le 5ème lien.");
+        await page.waitForFunction(() => document.querySelectorAll('a').length > 4, { timeout: 15000 });
+        const allLinks = await page.$$('a');
+        await allLinks[4].click();
+        console.log("LOG RETOUR: 6. Clic sur le 5ème lien effectué.");
+
+        // --- ÉTAPE 7: Saisie du Code ---
+        console.log(`LOG ACTION: 7. Saisie du code '${codeSaisi}'.`);
+        const codeInputSelector = 'input[type="text"]:not([disabled])';
+        await page.waitForSelector(codeInputSelector, { visible: true, timeout: 15000 });
+        await page.type(codeInputSelector, codeSaisi);
+        console.log("LOG RETOUR: 7. Saisie du code effectuée.");
+
+        // --- ÉTAPE 8: Clic sur 'Confirmer' ---
+        console.log("LOG ACTION: 8. Recherche et clic sur 'Confirmer'.");
+        const confirmButtonSelector = 'button ::-p-text(Confirmer)';
+        await page.waitForSelector(confirmButtonSelector, { visible: true });
+        await page.click(confirmButtonSelector);
+        console.log("LOG RETOUR: 8. Clic sur 'Confirmer' effectué.");
+        await page.waitForNavigation({ waitUntil: 'networkidle0' });
+        console.log("LOG RETOUR: 8. Navigation après confirmation terminée.");
+
+        // --- ÉTAPE 9: Déconnexion ---
+        console.log("LOG ACTION: 9. Recherche et clic sur 'Déconnexion'.");
         const logoutSelector = '[role="menuitem"] ::-p-text(Déconnexion)';
         await page.waitForSelector(logoutSelector, { visible: true });
         await page.click(logoutSelector);
+        console.log("LOG RETOUR: 9. Clic sur 'Déconnexion' effectué.");
         await page.waitForSelector('#username', { visible: true, timeout: 15000 });
-        console.log("LOG: Déconnexion confirmée.");
+        console.log("LOG RETOUR: 9. Déconnexion confirmée.");
 
-        return { success: true, message: `Opération pour l'ID ${idSaisi} lancée avec succès.` };
+        return { success: true, message: `Séquence complète pour l'ID ${idSaisi} réussie.` };
 
     } catch (error) {
         if (page) {
@@ -72,7 +104,7 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA) {
         throw new Error(error.message);
     } finally {
         if (browser) {
-            console.log("LOG: Fermeture du navigateur.");
+            console.log("LOG FINAL: Fermeture du navigateur.");
             await browser.close();
         }
     }
