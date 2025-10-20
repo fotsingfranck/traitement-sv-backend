@@ -57,7 +57,7 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
             await page.click('li ::-p-text(Appareil N°)');
             await page.type('input[placeholder="Valeur"]', idSaisi);
             await page.keyboard.press('Enter');
-            await page.waitForSelector('.MuiCircularProgress-root', { hidden: true, timeout: 30000 });
+            await page.waitForSelector('.MuiCircularProgress-root', { hidden: true, timeout: 20000 });
         } catch (e) {
             log(`[2.4] ÉCHEC (PLAN A). Passage au PLAN B : Navigation directe filtrée.`);
             await page.goto(finalFilteredUrl, { waitUntil: 'networkidle2' });
@@ -79,7 +79,7 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
         try {
             log(`[3.2] PLAN A : Tentative de clic avec le sélecteur simple.`);
             const selectorA = `tr:has-text("${idSaisi}") a[aria-label="Confirmer"]`;
-            await page.waitForSelector(selectorA, { visible: true, timeout: 5000 });
+            await page.waitForSelector(selectorA, { visible: true, timeout: 500 });
             await page.click(selectorA);
             clickSuccess = true;
             log("[3.2] SUCCÈS (PLAN A) : Clic réussi.");
