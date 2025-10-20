@@ -1,7 +1,7 @@
 // ==================================================================================================
-// === SCRIPT DE TRAITEMENT FINAL (PUPPETEER) - v8 "CONFIRMATION RENFORCÉE"                        ===
-// === Intègre une double tentative de clic (Plan A/B) pour le bouton "Confirmer" de l'étape 3.   ===
-// === Ajoute une vérification de l'URL intermédiaire après le clic sur "Confirmer".              ===
+// === SCRIPT DE TRAITEMENT FINAL (PUPPETEER) - v9 "TABULATION D'URGENCE"                         ===
+// === Ajoute un Plan C à l'étape 3 : simulation de 28 pressions sur la touche 'Tab' pour        ===
+// === atteindre et activer le bouton "Confirmer".                                              ===
 // ==================================================================================================
 
 const puppeteer = require('puppeteer');
@@ -95,7 +95,6 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
             await page.goto(finalFilteredUrl, { waitUntil: 'networkidle2' });
         }
         
-        // --- Vérification finale commune aux deux plans ---
         log("[2.5] VÉRIFICATION FINALE : L'URL doit contenir le filtre de l'ID.");
         const verificationUrlPart = `filter=%7B%22device_identifier%22%3A%22${idSaisi}%22%7D`;
         if (!page.url().includes(verificationUrlPart)) {
@@ -106,20 +105,19 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
 
 
         // =================================================================
-        // === SÉQUENCE 3/4 : SAISIE DU CODE ET VALIDATION (RENFORCÉE)   ===
+        // === SÉQUENCE 3/4 : SAISIE DU CODE (RENFORCÉE AVEC PLAN C)     ===
         // =================================================================
-        log("--- SÉQUENCE 3 : CONFIRMATION DU TRAITEMENT (RENFORCÉE) ---");
+        log("--- SÉQUENCE 3 : CONFIRMATION DU TRAITEMENT (RENFORCÉE + PLAN C) ---");
         log("[3.1] DÉBUT : La page affiche l'appareil filtré.");
         
-        // --- Logique de clic renforcée (Plan A / Plan B) ---
         const confirmIconSelectorSimple = `tr:has-text("${idSaisi}") a[aria-label="Confirmer"]`;
         const confirmIconSelectorComplexe = `//tr[.//td[contains(.,'${idSaisi}')]]//a[@aria-label='Confirmer' or @role='button']`;
 
         try {
-            log(`[3.2] PLAN A : Tentative de clic avec le sélecteur simple : ${confirmIconSelectorSimple}`);
+            log(`[3.2] PLAN A : Tentative de clic avec le sélecteur simple.`);
             await page.waitForSelector(confirmIconSelectorSimple, { visible: true, timeout: 5000 });
             await page.click(confirmIconSelectorSimple);
-            log("[3.2] SUCCÈS (PLAN A) : Clic réussi avec le sélecteur simple.");
+            log("[3.2] SUCCÈS (PLAN A) : Clic réussi.");
         } catch (e) {
             log("[3.2] ÉCHEC (PLAN A) : Sélecteur simple non trouvé. Passage au PLAN B.");
             try {
@@ -127,12 +125,26 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
                 const [button] = await page.$x(confirmIconSelectorComplexe);
                 if (button) {
                     await button.click();
-                    log("[3.2] SUCCÈS (PLAN B) : Clic réussi avec le sélecteur XPath.");
+                    log("[3.2] SUCCÈS (PLAN B) : Clic réussi.");
                 } else {
-                    throw new Error("Le bouton 'Confirmer' est introuvable avec les deux sélecteurs (simple et XPath).");
+                    // Si le sélecteur XPath échoue aussi, on passe au Plan C
+                    throw new Error("Le sélecteur XPath n'a pas trouvé de bouton.");
                 }
             } catch (e2) {
-                 throw new Error(`Le clic sur le bouton 'Confirmer' a échoué avec les deux méthodes. Erreur: ${e2.message}`);
+                log(`[3.2] ÉCHEC (PLAN B) : ${e2.message}. Passage au PLAN C.`);
+                try {
+                    log("[3.2] PLAN C : Lancement de la séquence de tabulation d'urgence (28 x TAB).");
+                    for (let i = 0; i < 28; i++) {
+                        await page.keyboard.press('Tab');
+                        // Petite pause pour que le focus se mette à jour visuellement
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                    log("       ...Séquence de tabulation terminée. Pression sur 'Entrée'.");
+                    await page.keyboard.press('Enter');
+                    log("[3.2] SUCCÈS (PLAN C) : Activation par 'Entrée' effectuée.");
+                } catch (e3) {
+                    throw new Error(`ÉCHEC TOTAL : Le clic a échoué avec les 3 méthodes (CSS, XPath, Tabulation). Erreur: ${e3.message}`);
+                }
             }
         }
         
