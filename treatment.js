@@ -1,23 +1,14 @@
 // ================================================================================
-// === SCRIPT DE TRAITEMENT FINAL (PUPPETEER) - VERSION "ULTRA BAVARDE & PARANOÏAQUE" ===
-// === Fusionne les 4 séquences avec des logs détaillés et des vérifications d'URL. ===
+// === SCRIPT DE TRAITEMENT FINAL (PUPPETEER) - VERSION "ULTRA BAVARDE & PARANOÏAQUE" v3 ===
+// === Correction du timeout sur le bouton "Appareils".                             ===
 // ================================================================================
 
 const puppeteer = require('puppeteer');
 
-/**
- * Fonction principale du robot qui exécute la séquence complète.
- * @param {string} idSaisi - L'ID de l'appareil à traiter.
- * @param {string} codeSaisi - Le code de confirmation.
- * @param {string} userMRA - Le nom d'utilisateur.
- * @param {string} mdpMRA - Le mot de passe.
- * @param {function} logCallback - Fonction pour envoyer des logs en temps réel.
- */
 async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
     let browser;
     let page;
 
-    // Fonction interne pour logger, pour ne pas répéter 'if (logCallback)' partout.
     const log = (message) => {
         if (logCallback) {
             logCallback(message);
@@ -29,13 +20,12 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
     try {
         log("<<<<< DÉMARRAGE DU ROBOT TRAITEMENT-SV >>>>>");
         browser = await puppeteer.launch({
-            headless: true, // `true` est essentiel pour le serveur.
-            args: ['--no-sandbox', '--disable-setuid-sandbox'] // Indispensable pour Render/Linux
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
         page = await browser.newPage();
         await page.setViewport({ width: 1366, height: 768 });
-        // Un timeout long (90s) pour les actions, pour ne pas échouer sur un serveur lent.
-        page.setDefaultTimeout(90000); 
+        page.setDefaultTimeout(90000);
 
         // =================================================================
         // === SÉQUENCE 1/4 : CONNEXION                                  ===
@@ -44,7 +34,7 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
         log(`[1.1] DÉBUT : Navigation vers la page de login.`);
         log(`      URL ATTENDUE : https://smartmeteringbom.eneoapps.com/#/login`);
         await page.goto('https://smartmeteringbom.eneoapps.com/#/login', { waitUntil: 'networkidle2' });
-        
+
         if (!page.url().includes('/login')) {
             throw new Error("Échec de la navigation initiale. La page de login n'a pas été atteinte.");
         }
@@ -54,14 +44,14 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
         await page.waitForSelector('#username', { visible: true });
         await page.type('#username', userMRA);
         await page.type('#password', mdpMRA);
-        
+
         log(`[1.3] ACTION : Clic sur le bouton 'Sign in'.`);
         await page.click('button[type="submit"]');
 
         log(`[1.4] VÉRIFICATION : Attente de la redirection et du chargement du tableau de bord.`);
         log(`      URL ATTENDUE : https://smartmeteringbom.eneoapps.com/#/`);
         await page.waitForNavigation({ waitUntil: 'networkidle2' });
-        
+
         if (!page.url().endsWith('/#/')) {
              throw new Error("La connexion a échoué. Redirection vers le tableau de bord non détectée.");
         }
@@ -75,26 +65,35 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
         log("--- SÉQUENCE 2 : FILTRAGE DE L'APPAREIL ---");
         log("[2.1] DÉBUT : La page actuelle est le tableau de bord.");
 
-        log("[2.2] ACTION : Clic sur le bouton du menu 'Appareils'.");
-        await page.click('a[href="#/device"]');
+        // ========================================================================
+        // === LA CORRECTION EST ICI : On attend que le bouton soit VISIBLE     ===
+        // ========================================================================
+        const appareilsButtonSelector = 'a[href="#/device"]';
+        log(`[2.2] VÉRIFICATION : Attente de la visibilité du bouton 'Appareils' (sélecteur: ${appareilsButtonSelector}).`);
+        await page.waitForSelector(appareilsButtonSelector, { visible: true, timeout: 15000 });
+        log("[2.2] SUCCÈS : Bouton 'Appareils' visible.");
+        // ========================================================================
+
+        log("[2.3] ACTION : Clic sur le bouton du menu 'Appareils'.");
+        await page.click(appareilsButtonSelector);
         log("       ...attente du chargement de la page des appareils...");
         await page.waitForNavigation({ waitUntil: 'networkidle2' });
 
-        log("[2.3] ACTION : Clic sur 'Ajouter un filtre'.");
+        log("[2.4] ACTION : Clic sur 'Ajouter un filtre'.");
         await page.waitForSelector('button ::-p-text(Ajouter un filtre)', { visible: true });
         await page.click('button ::-p-text(Ajouter un filtre)');
 
-        log("[2.4] ACTION : Sélection du type de filtre 'Appareil N°'.");
+        log("[2.5] ACTION : Sélection du type de filtre 'Appareil N°'.");
         await page.click('li ::-p-text(Appareil N°)');
 
-        log(`[2.5] ACTION : Saisie de l'ID à rechercher : "${idSaisi}".`);
+        log(`[2.6] ACTION : Saisie de l'ID à rechercher : "${idSaisi}".`);
         await page.type('input[placeholder="Valeur"]', idSaisi);
         await page.keyboard.press('Enter');
 
-        log("[2.6] VÉRIFICATION : Attente de la fin de la recherche (disparition du spinner).");
+        log("[2.7] VÉRIFICATION : Attente de la fin de la recherche (disparition du spinner).");
         await page.waitForSelector('.MuiCircularProgress-root', { hidden: true, timeout: 30000 });
-        
-        log("[2.7] VÉRIFICATION FINALE : Contrôle de l'URL après filtrage.");
+
+        log("[2.8] VÉRIFICATION FINALE : Contrôle de l'URL après filtrage.");
         const encodedFilter = encodeURIComponent(JSON.stringify({ "device_identifier": idSaisi }));
         const expectedUrlPart = `#/device?filter=${encodedFilter}`;
         log(`      ...doit contenir : "${expectedUrlPart}"`);
@@ -102,7 +101,7 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
         if (!currentUrl.includes(expectedUrlPart)) {
             throw new Error(`Le filtrage semble avoir échoué. L'URL actuelle (${currentUrl}) ne correspond pas à l'attente.`);
         }
-        log("[2.7] SUCCÈS : L'URL de la page filtrée est correcte.");
+        log("[2.8] SUCCÈS : L'URL de la page filtrée est correcte.");
         log(`--- FIN SÉQUENCE 2 : Appareil ${idSaisi} trouvé et URL vérifiée. ---\n`);
 
 
@@ -111,7 +110,7 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
         // =================================================================
         log("--- SÉQUENCE 3 : CONFIRMATION DU TRAITEMENT ---");
         log("[3.1] DÉBUT : La page affiche l'appareil filtré.");
-        
+
         log("[3.2] ACTION : Clic sur l'icône 'Confirmer' de la bonne ligne.");
         const confirmIconSelector = `tr:has-text("${idSaisi}") a[aria-label="Confirmer"]`;
         await page.waitForSelector(confirmIconSelector, { visible: true });
@@ -119,17 +118,17 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
 
         log("[3.3] VÉRIFICATION : Attente du chargement de la page de saisie du code.");
         await page.waitForSelector('h2 ::-p-text(Confirmer l\'appareil)', { visible: true });
-        
+
         log(`[3.4] ACTION : Saisie du code de confirmation : "${codeSaisi}".`);
         await page.type('main input[type="text"]', codeSaisi);
-        
+
         log("[3.5] ACTION : Clic sur le bouton final 'Confirmer'.");
         await page.click('button ::-p-text(Confirmer)');
 
         log("[3.6] VÉRIFICATION : Attente du retour à la liste des appareils.");
         log(`      URL FINALE ATTENDUE : https://smartmeteringbom.eneoapps.com/#/device`);
         await page.waitForNavigation({ waitUntil: 'networkidle2' });
-        
+
         if (!page.url().endsWith('/#/device')) {
             throw new Error("La confirmation a échoué. Pas de retour à la liste des appareils.");
         }
@@ -142,20 +141,20 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
         // =================================================================
         log("--- SÉQUENCE 4 : DÉCONNEXION ---");
         log("[4.1] DÉBUT : La page actuelle est la liste des appareils.");
-        
+
         log("[4.2] ACTION : Clic sur le bouton du menu 'Déconnexion'.");
         await page.click('li ::-p-text(Déconnexion)');
 
         log("[4.3] VÉRIFICATION : Attente du retour à la page de login.");
         log(`      URL FINALE ATTENDUE : https://smartmeteringbom.eneoapps.com/#/login`);
         await page.waitForSelector('#username', { visible: true });
-        
+
         if (!page.url().includes('/login')) {
              throw new Error("La déconnexion a échoué. La page de login n'a pas été atteinte.");
         }
         log("[4.3] SUCCÈS : Déconnexion confirmée.");
         log("--- FIN SÉQUENCE 4 : Session terminée proprement. ---\n");
-        
+
         log("<<<<< SÉQUENCE COMPLÈTE RÉUSSIE >>>>>");
         return { success: true, message: `Séquence complète pour l'ID ${idSaisi} réussie.` };
 
@@ -176,5 +175,4 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
     }
 }
 
-// On exporte la fonction pour que le script principal du serveur puisse l'appeler.
 module.exports = { runTreatment };
