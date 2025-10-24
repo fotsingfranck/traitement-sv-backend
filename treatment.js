@@ -39,7 +39,7 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
         log("--- SÉQUENCE 2 : FILTRAGE DE L'APPAREIL ---");
         const appareilsUrl = 'https://smartmeteringbom.eneoapps.com/#/device';
         try {
-            await page.waitForSelector('a[href="#/device"]', { visible: true, timeout: 10000 });
+            await page.waitForSelector('a[href="#/device"]', { visible: true, timeout: 1000 });
             await page.click('a[href="#/device"]');
             await page.waitForNavigation({ waitUntil: 'networkidle2' });
         } catch (e) {
@@ -57,7 +57,7 @@ async function runTreatment(idSaisi, codeSaisi, userMRA, mdpMRA, logCallback) {
             await page.click('li ::-p-text(Appareil N°)');
             await page.type('input[placeholder="Valeur"]', idSaisi);
             await page.keyboard.press('Enter');
-            await page.waitForSelector('.MuiCircularProgress-root', { hidden: true, timeout: 30000 });
+            await page.waitForSelector('.MuiCircularProgress-root', { hidden: true, timeout: 3000 });
         } catch (e) {
             log(`[2.4] ÉCHEC (PLAN A). Passage au PLAN B : Navigation directe filtrée.`);
             await page.goto(finalFilteredUrl, { waitUntil: 'networkidle2' });
